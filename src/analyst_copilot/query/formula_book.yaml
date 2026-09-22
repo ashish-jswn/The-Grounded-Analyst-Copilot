@@ -1,0 +1,208 @@
+# The formula book.
+#
+# THIS FILE IS ALSO THE METRIC -> us-gaap CONCEPT MAP. Not two artifacts:
+# `operands.concepts` links straight into the XBRL fact path, and where XBRL is
+# absent the same operand resolves through the table/narrative ladder.
+#
+# `concepts` are tried IN ORDER; the first that resolves for the period wins.
+#
+# PRECEDENCE - first match wins, and this file is only level 2:
+#   1. a definition supplied IN THE QUESTION  (measured: 14/136 questions),
+#      which overrides this book INCLUDING its averaging convention and rounding
+#   2. this curated book
+#   3. an LLM-proposed formula, gated by four checks
+#   4. "Not found in this filing."
+#
+# These are standard finance definitions valid for ANY filing - they are not
+# tuned to the practice set.
+# Of the 25 domain templates, 15 need formulas; the other 10 are narrative and
+# take the retrieval path with no calculator.
+
+# ---------- shared operand definitions ----------
+operands:
+  revenue:            {concepts: ["us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+                                  "us-gaap:Revenues", "us-gaap:SalesRevenueNet"], unit: currency}
+  cogs:               {concepts: ["us-gaap:CostOfGoodsAndServicesSold", "us-gaap:CostOfRevenue"], unit: currency}
+  gross_profit:       {concepts: ["us-gaap:GrossProfit"], unit: currency, derive: revenue - cogs}
+  operating_income:   {concepts: ["us-gaap:OperatingIncomeLoss"], unit: currency}
+  net_income:         {concepts: ["us-gaap:NetIncomeLoss", "us-gaap:ProfitLoss"], unit: currency}
+  pretax_income:      {concepts: ["us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"], unit: currency}
+  tax_expense:        {concepts: ["us-gaap:IncomeTaxExpenseBenefit"], unit: currency}
+  total_assets:       {concepts: ["us-gaap:Assets"], unit: currency}
+  current_assets:     {concepts: ["us-gaap:AssetsCurrent"], unit: currency}
+  current_liabilities: {concepts: ["us-gaap:LiabilitiesCurrent"], unit: currency}
+  inventory:          {concepts: ["us-gaap:InventoryNet"], unit: currency}
+  receivables:        {concepts: ["us-gaap:AccountsReceivableNetCurrent"], unit: currency}
+  payables:           {concepts: ["us-gaap:AccountsPayableCurrent"], unit: currency}
+  ppe_net:            {concepts: ["us-gaap:PropertyPlantAndEquipmentNet"], unit: currency}
+  capex:              {concepts: ["us-gaap:PaymentsToAcquirePropertyPlantAndEquipment"], unit: currency}
+  cfo:                {concepts: ["us-gaap:NetCashProvidedByUsedInOperatingActivities"], unit: currency}
+  cfi:                {concepts: ["us-gaap:NetCashProvidedByUsedInInvestingActivities"], unit: currency}
+  cff:                {concepts: ["us-gaap:NetCashProvidedByUsedInFinancingActivities"], unit: currency}
+  d_and_a:            {concepts: ["us-gaap:DepreciationDepletionAndAmortization",
+                                  "us-gaap:DepreciationAmortizationAndAccretionNet"], unit: currency}
+  equity:             {concepts: ["us-gaap:StockholdersEquity"], unit: currency}
+  lt_debt:            {concepts: ["us-gaap:LongTermDebtNoncurrent"], unit: currency}
+  st_debt:            {concepts: ["us-gaap:ShortTermBorrowings", "us-gaap:LongTermDebtCurrent"], unit: currency}
+  cash:               {concepts: ["us-gaap:CashAndCashEquivalentsAtCarryingValue"], unit: currency}
+
+# ---------- metrics ----------
+metrics:
+  - id: quick_ratio                       # dg01, dg02
+    aliases: [quick ratio, acid test]
+    definition: "(Current assets minus inventory) divided by current liabilities"
+    formula: (current_assets - inventory) / current_liabilities
+    result: {unit: ratio, dp: 2}
+
+  - id: current_ratio
+    aliases: [current ratio]
+    definition: "Current assets divided by current liabilities"
+    formula: current_assets / current_liabilities
+    result: {unit: ratio, dp: 2}
+
+  - id: working_capital                   # dg24
+    aliases: [working capital]
+    definition: "Current assets minus current liabilities"
+    formula: current_assets - current_liabilities
+    result: {unit: currency, dp: 0}
+
+  - id: gross_margin                      # dg03, dg13, dg16
+    aliases: [gross margin, gross profit margin]
+    definition: "Gross profit divided by revenue"
+    formula: gross_profit / revenue
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: operating_margin                  # dg14, dg17
+    aliases: [operating margin, operating profit margin]
+    definition: "Operating income divided by revenue"
+    formula: operating_income / revenue
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: net_margin
+    aliases: [net margin, net profit margin]
+    definition: "Net income divided by revenue"
+    formula: net_income / revenue
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: capex_to_revenue                  # dg06
+    aliases: [capex as a percent of revenue, capital intensity]
+    definition: "Capital expenditures divided by revenue"
+    formula: capex / revenue
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: fixed_assets_to_total_assets      # dg06
+    aliases: [fixed assets to total assets]
+    definition: "Net property, plant and equipment divided by total assets"
+    formula: ppe_net / total_assets
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: roa                               # dg06
+    aliases: [return on assets, roa]
+    definition: "Net income divided by average total assets"
+    formula: net_income / avg(total_assets, prev, current)
+    period_rule: average_of(prev, current)
+    result: {unit: ratio, render: percent, dp: 2}
+
+  - id: roe
+    aliases: [return on equity, roe]
+    definition: "Net income divided by average shareholders' equity"
+    formula: net_income / avg(equity, prev, current)
+    period_rule: average_of(prev, current)
+    result: {unit: ratio, render: percent, dp: 2}
+
+  - id: inventory_turnover                # dg25
+    aliases: [inventory turnover]
+    definition: "Cost of goods sold divided by average inventory"
+    formula: cogs / avg(inventory, prev, current)
+    period_rule: average_of(prev, current)
+    result: {unit: ratio, dp: 2}
+
+  - id: fixed_asset_turnover
+    aliases: [fixed asset turnover]
+    definition: "Revenue divided by average net PP&E"
+    formula: revenue / avg(ppe_net, prev, current)
+    period_rule: average_of(prev, current)
+    result: {unit: ratio, dp: 2}
+
+  - id: asset_turnover
+    aliases: [asset turnover]
+    definition: "Revenue divided by average total assets"
+    formula: revenue / avg(total_assets, prev, current)
+    period_rule: average_of(prev, current)
+    result: {unit: ratio, dp: 2}
+
+  - id: dso
+    aliases: [days sales outstanding, dso]
+    definition: "365 times average accounts receivable divided by revenue"
+    formula: 365 * avg(receivables, prev, current) / revenue
+    period_rule: average_of(prev, current)
+    result: {unit: days, dp: 2}
+
+  - id: dpo
+    aliases: [days payable outstanding, dpo]
+    definition: "365 times average accounts payable divided by (COGS plus change in inventory)"
+    formula: 365 * avg(payables, prev, current) / (cogs + delta(inventory, prev, current))
+    period_rule: average_of(prev, current)
+    result: {unit: days, dp: 2}
+
+  - id: operating_cash_flow_ratio
+    aliases: [operating cash flow ratio]
+    definition: "Cash from operations divided by total current liabilities"
+    formula: cfo / current_liabilities
+    result: {unit: ratio, dp: 2}
+
+  - id: free_cash_flow
+    aliases: [free cash flow, fcf]
+    definition: "Cash from operations minus capital expenditures"
+    formula: cfo - capex
+    result: {unit: currency, dp: 0}
+
+  - id: fcf_conversion
+    aliases: [free cash flow conversion]
+    definition: "Free cash flow divided by net income"
+    formula: (cfo - capex) / net_income
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: ebitda
+    aliases: [ebitda]
+    definition: "Operating income plus depreciation and amortization"
+    formula: operating_income + d_and_a
+    result: {unit: currency, dp: 0}
+
+  - id: ebitda_margin
+    aliases: [ebitda margin, unadjusted ebitda margin]
+    definition: "EBITDA divided by revenue, where EBITDA is operating income plus D&A"
+    formula: (operating_income + d_and_a) / revenue
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: effective_tax_rate                # dg23
+    aliases: [effective tax rate]
+    definition: "Income tax expense divided by pre-tax income"
+    formula: tax_expense / pretax_income
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: total_debt                        # dg22
+    aliases: [total debt, debt on balance sheet]
+    definition: "Short-term borrowings plus current portion of long-term debt plus long-term debt"
+    formula: st_debt + lt_debt
+    result: {unit: currency, dp: 0}
+
+  - id: debt_to_equity
+    aliases: [debt to equity, leverage ratio]
+    definition: "Total debt divided by shareholders' equity"
+    formula: (st_debt + lt_debt) / equity
+    result: {unit: ratio, dp: 2}
+
+  - id: revenue_growth                    # dg05, dg15
+    aliases: [revenue growth, sales growth, year-over-year revenue change]
+    definition: "Change in revenue from the prior period divided by prior-period revenue"
+    formula: delta(revenue, prev, current) / prev(revenue)
+    period_rule: change(prev, current)
+    result: {unit: ratio, render: percent, dp: 1}
+
+  - id: cagr
+    aliases: [cagr, compound annual growth rate]
+    definition: "Compound annual growth rate over n years"
+    formula: (end / start) ** (1 / n) - 1
+    period_rule: span
+    result: {unit: ratio, render: percent, dp: 1}

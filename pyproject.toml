@@ -1,0 +1,36 @@
+[project]
+name = "analyst-copilot"
+version = "0.1.0"
+description = "A trustworthy question-answering copilot over SEC annual/quarterly filings: precise answers with exact evidence locations, or an honest refusal."
+# Every module uses `from __future__ import annotations`, so PEP 604 unions in
+# signatures are fine on 3.10.
+requires-python = ">=3.10"
+
+# Kept in step with requirements.txt.
+dependencies = [
+    "lxml>=5.0",
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.2.5",
+    "rank-bm25>=0.2.2",
+    "openai>=1.40",
+    "httpx>=0.27",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

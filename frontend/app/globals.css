@@ -1,0 +1,435 @@
+/* Light, neutral, quiet — the ChatGPT/Gemini register. One accent used only
+   for interaction, semantic colour only in small status marks, and the answer
+   itself is plain text on the page rather than a bordered card. */
+
+:root {
+  --bg: #ffffff;
+  --sidebar-bg: #f7f7f8;
+  --surface: #f7f7f8;        /* bubbles, wells */
+  --surface-2: #ececee;
+  --line: #e6e6ea;
+  --line-strong: #c9cdd6;
+  --text: #1a1a1e;
+  --muted: #6e7076;
+  --faint: #9b9da3;
+  --quote-text: #3c3f45;
+  --accent: #3662e3;
+  --ok: #188038;
+  --warn: #b26a00;
+  --bad: #c5221f;
+  --btn: #1a1a1e;            /* primary buttons are near-black, not coloured */
+  --btn-text: #ffffff;
+  --scrollbar: #d6d7db;
+  --shadow: rgba(0, 0, 0, .05);
+  --sidebar-w: 264px;
+  color-scheme: light;
+}
+
+/* Dark is the same neutral register, not a colour change: Gemini's grays.
+   An inline script in layout.tsx stamps data-theme before first paint, so
+   there is no flash and this block is the single source of the dark values. */
+:root[data-theme="dark"] {
+  --bg: #212327;
+  --sidebar-bg: #17181b;
+  --surface: #2b2d31;
+  --surface-2: #35373c;
+  --line: #393b40;
+  --line-strong: #4c4e54;
+  --text: #e8eaed;
+  --muted: #9aa0a6;
+  --faint: #71747a;
+  --quote-text: #c6c9ce;
+  --accent: #8ab4f8;
+  --ok: #81c995;
+  --warn: #fdd663;
+  --bad: #f28b82;
+  --btn: #e8eaed;            /* inverted, as ChatGPT's dark send button */
+  --btn-text: #202124;
+  --scrollbar: #4a4c52;
+  --shadow: rgba(0, 0, 0, .35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;             /* the transcript scrolls, never the page */
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+code, pre, .mono {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+/* ── shell ────────────────────────────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100dvh;
+  transition: grid-template-columns .18s ease;
+}
+.shell.collapsed { grid-template-columns: 0 1fr; }
+
+.sidebar {
+  background: var(--sidebar-bg);
+  padding: 14px 12px 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;                 /* lets the column actually reach 0 */
+}
+.shell.collapsed .sidebar { padding-left: 0; padding-right: 0; }
+
+/* Only meaningful as an overlay on narrow screens; see the media query. */
+.scrim { display: none; border: none; background: rgba(0, 0, 0, .35); padding: 0; }
+
+/* `min-height: 0` IS LOAD-BEARING, TWICE.
+   A flex item defaults to `min-height: auto`, meaning it refuses to shrink
+   below its content. Without it here, a long answer made `.transcript` grow
+   past the viewport instead of scrolling: the reply was clipped, the composer
+   was pushed off-screen, and there was nothing to scroll because the page
+   itself does not scroll. Same reason on `.main`, which is a grid item. */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100dvh;
+  background: var(--bg);
+}
+
+/* ── topbar ───────────────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 10px 16px;
+}
+.topbar h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.topbar-note { margin-left: auto; font-size: 12px; color: var(--faint); }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex: none;
+  background: transparent; color: var(--muted);
+  border: none; border-radius: 8px;
+}
+.icon-btn:hover { background: var(--surface); color: var(--text); }
+
+/* ── sidebar contents ─────────────────────────────────────────────────── */
+.brand { display: flex; align-items: center; gap: 8px; margin: 4px 6px 14px; }
+.brand-mark {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--accent);
+}
+.brand-name { font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+
+.corpus-line { font-size: 12.5px; color: var(--muted); padding: 0 6px 4px; white-space: nowrap; }
+.corpus-line b { color: var(--text); font-weight: 600; }
+
+.section-label {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 12px; color: var(--muted); font-weight: 600;
+  margin: 20px 6px 8px; white-space: nowrap;
+}
+.section-count { color: var(--faint); font-weight: 400; }
+
+.filter {
+  width: 100%; margin-bottom: 6px; padding: 7px 10px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px;
+  font: inherit; font-size: 12.5px; outline: none;
+}
+.filter:focus { border-color: var(--accent); }
+.filter::placeholder { color: var(--faint); }
+
+/* ── upload ───────────────────────────────────────────────────────────── */
+.hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; padding: 0 2px; }
+
+.file-drop {
+  display: block; width: 100%; text-align: center; cursor: pointer;
+  border: 1px dashed var(--line-strong); border-radius: 10px;
+  padding: 14px 10px; color: var(--muted); font-size: 12.5px;
+  background: var(--bg); transition: border-color .12s, color .12s;
+}
+.file-drop:hover { border-color: var(--accent); color: var(--text); }
+.file-drop input { display: none; }
+.file-drop-sub { margin-top: 3px; font-size: 11px; color: var(--faint); }
+.file-name { margin-top: 7px; font-size: 12px; color: var(--text); word-break: break-all; }
+
+button {
+  font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid transparent;
+  transition: background .12s, border-color .12s, opacity .12s;
+}
+.btn-primary {
+  width: 100%; margin-top: 9px; padding: 8px 12px;
+  background: var(--btn); color: var(--btn-text); font-weight: 600; font-size: 13px;
+  border-radius: 9px;
+}
+.btn-primary:disabled {
+  background: var(--surface-2); color: var(--faint);
+  cursor: not-allowed;
+}
+
+/* ── progress ─────────────────────────────────────────────────────────── */
+.progress { margin-top: 11px; }
+.progress-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px; margin-bottom: 5px;
+}
+.progress-stage { color: var(--text); font-weight: 500; }
+.progress-pct { color: var(--faint); }
+.progress-track { height: 4px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .35s ease; }
+.progress-fill.done { background: var(--ok); }
+.progress-fill.failed { background: var(--bad); }
+.progress-note { font-size: 12px; margin-top: 6px; color: var(--muted); }
+.progress-note.ok { color: var(--ok); }
+.progress-note.bad { color: var(--bad); }
+
+/* ── filings list, grouped by company ─────────────────────────────────── */
+.filings { display: flex; flex-direction: column; gap: 1px; }
+
+details.company > summary {
+  display: flex; align-items: baseline; gap: 7px;
+  padding: 6px 8px; border-radius: 7px; font-size: 12.5px;
+  cursor: pointer; list-style: none; user-select: none;
+  color: var(--text);
+}
+details.company > summary::-webkit-details-marker { display: none; }
+details.company > summary::before {
+  content: "▸"; color: var(--faint); font-size: 10px; width: 10px; flex: none;
+}
+details.company[open] > summary::before { content: "▾"; }
+details.company > summary:hover { background: var(--surface-2); }
+.company-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 500;
+}
+.company-count { margin-left: auto; color: var(--faint); font-size: 11px; flex: none; }
+
+.filing {
+  display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
+  padding: 4px 8px 4px 25px; border-radius: 7px; font-size: 12px;
+}
+.filing:hover { background: var(--surface-2); }
+.filing-id { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filing:hover .filing-id { color: var(--text); }
+.filing-meta { color: var(--faint); flex: none; font-size: 11px; }
+.filing-empty { font-size: 12px; color: var(--faint); padding: 6px 8px; }
+
+/* ── transcript ───────────────────────────────────────────────────────── */
+.transcript {
+  flex: 1 1 auto;
+  min-height: 0;                /* see the note on .main */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 20px 8px;
+}
+.thread {
+  max-width: 720px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 26px;
+}
+
+.turn-question {
+  align-self: flex-end; max-width: 75%;
+  background: var(--surface); border-radius: 18px 18px 4px 18px;
+  padding: 10px 16px;
+}
+
+.turn-answer { display: flex; flex-direction: column; gap: 8px; }
+
+/* The reply is text on the page, not a bordered card. The status is one
+   quiet line above it. */
+.status-line {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; color: var(--muted);
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.status-dot.answered { background: var(--ok); }
+.status-dot.abstained { background: var(--warn); }
+.status-dot.clarify { background: var(--accent); }
+.status-dot.error { background: var(--bad); }
+
+.answer-text { margin: 0; font-size: 15.5px; line-height: 1.65; white-space: pre-wrap; }
+.answer-text.refusal { color: var(--text); font-weight: 500; }
+.decline-note { font-size: 13px; color: var(--muted); margin: 0; }
+
+.answer-meta { font-size: 12px; color: var(--faint); }
+
+/* ── computation ──────────────────────────────────────────────────────── */
+.computation {
+  margin: 4px 0 0; padding: 10px 14px;
+  background: var(--surface); border-radius: 12px;
+}
+.computation-definition { font-size: 13px; color: var(--text); margin-bottom: 5px; }
+.computation-formula { font-size: 12.5px; color: var(--muted); }
+.computation-source { font-size: 11px; color: var(--faint); margin-left: 7px; }
+.operands { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.operand { font-size: 12px; color: var(--muted); }
+.operand b { color: var(--text); font-weight: 500; }
+
+/* ── sources ──────────────────────────────────────────────────────────── */
+.sources-label { font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 8px 0 0; }
+.sources { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 0; padding: 0; list-style: none; }
+.source-item {
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  min-width: 0;
+}
+.source-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  padding: 8px 12px; font-size: 12.5px; background: var(--surface);
+}
+.source-doc { color: var(--text); font-weight: 600; }
+.source-page { color: var(--muted); }
+.source-section { color: var(--faint); font-size: 11.5px; }
+
+/* THE QUOTE STAYS VISIBLE. Evidence on every answer is the core promise of
+   the product, so it is never folded behind a click. It is capped
+   and scrolls on its own because evidence is frequently a whole financial
+   table, and uncapped one quote filled the viewport. */
+.source-quote {
+  margin: 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.55;
+  background: var(--bg); color: var(--quote-text);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 240px; overflow: auto; overscroll-behavior: contain;
+  border-top: 1px solid var(--line);
+}
+
+.no-proof { font-size: 12.5px; color: var(--warn); }
+
+/* ── "how this was answered" ──────────────────────────────────────────── */
+details.how { margin-top: 4px; }
+details.how > summary {
+  cursor: pointer; font-size: 12.5px; color: var(--faint);
+  list-style: none; user-select: none; width: fit-content;
+}
+details.how > summary::-webkit-details-marker { display: none; }
+details.how > summary:hover { color: var(--muted); }
+
+.how-steps { margin: 10px 0 0; padding: 0 0 0 2px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.how-step { display: flex; gap: 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.how-ico { flex: none; width: 18px; text-align: center; }
+.how-step.pass .how-ico { color: var(--ok); }
+.how-step.fail .how-ico { color: var(--bad); }
+.how-step b { color: var(--text); font-weight: 600; }
+.how-reason {
+  margin-top: 4px; padding: 8px 10px; border-radius: 8px;
+  background: var(--surface); font-size: 12.5px;
+}
+
+details.dev { margin-top: 10px; }
+details.dev > summary {
+  cursor: pointer; color: var(--faint); font-size: 11.5px;
+  list-style: none; user-select: none; width: fit-content;
+}
+details.dev > summary::-webkit-details-marker { display: none; }
+details.dev > summary:hover { color: var(--muted); }
+.dev-json {
+  margin-top: 8px; padding: 10px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--line);
+  font-size: 11.5px; color: var(--muted);
+  max-height: 280px; overflow: auto; white-space: pre;
+  overscroll-behavior: contain;
+}
+
+/* ── composer ─────────────────────────────────────────────────────────── */
+.composer { flex: none; padding: 8px 20px 14px; background: var(--bg); }
+.composer-inner { max-width: 720px; margin: 0 auto; }
+.composer-row {
+  display: flex; gap: 8px; align-items: flex-end;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 24px; padding: 8px 8px 8px 18px;
+  box-shadow: 0 1px 6px var(--shadow);
+  transition: border-color .12s, box-shadow .12s;
+}
+.composer-row:focus-within {
+  border-color: var(--line-strong);
+  box-shadow: 0 2px 10px var(--shadow);
+}
+textarea {
+  flex: 1; resize: none; border: none; outline: none; background: transparent;
+  color: var(--text); font: inherit; max-height: 180px; padding: 5px 0;
+}
+textarea::placeholder { color: var(--faint); }
+
+.btn-send {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--btn); color: var(--btn-text); padding: 0;
+}
+.btn-send:disabled { opacity: .25; cursor: not-allowed; }
+
+.composer-foot {
+  text-align: center;
+  font-size: 11.5px; color: var(--faint); margin-top: 8px;
+}
+
+/* ── empty state ──────────────────────────────────────────────────────── */
+.empty {
+  max-width: 640px; margin: 0 auto; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
+  min-height: 100%; padding-bottom: 6vh;
+}
+.empty h2 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.02em; font-weight: 600; }
+.empty p { color: var(--muted); margin: 0 auto 28px; font-size: 14px; max-width: 460px; }
+.examples { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; }
+.example {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; color: var(--muted); font-size: 13px; width: 100%;
+  line-height: 1.45;
+}
+.example:hover { background: var(--surface); color: var(--text); }
+@media (max-width: 640px) { .examples { grid-template-columns: 1fr; } }
+
+/* ── misc ─────────────────────────────────────────────────────────────── */
+.thinking { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; }
+.dots { display: inline-flex; gap: 3px; }
+.dots i {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+  animation: pulse 1.3s infinite ease-in-out;
+}
+.dots i:nth-child(2) { animation-delay: .16s; }
+.dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes pulse { 0%, 80%, 100% { opacity: .2; } 40% { opacity: .9; } }
+.thinking-elapsed { color: var(--faint); font-size: 12px; }
+
+.banner {
+  border: 1px solid var(--bad); background: color-mix(in srgb, var(--bad) 8%, var(--bg));
+  color: var(--bad);
+  border-radius: 10px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 12px;
+}
+
+/* Slim scrollbars. */
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 5px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── narrow screens: the sidebar becomes an overlay drawer ────────────── */
+@media (max-width: 860px) {
+  .shell, .shell.collapsed { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 20;
+    width: min(84vw, var(--sidebar-w));
+    padding: 14px 12px 24px;
+    border-right: 1px solid var(--line);
+    transition: transform .18s ease;
+  }
+  .shell.collapsed .sidebar { transform: translateX(-100%); }
+  .scrim { display: block; position: fixed; inset: 0; z-index: 10; }
+  .shell.collapsed .scrim { display: none; }
+  .topbar-note { display: none; }
+}

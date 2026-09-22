@@ -1,0 +1,27 @@
+Find the evidence needed to answer the question, using ONLY the supplied pages.
+
+Return evidence slots. Do NOT write a prose answer, and do NOT compute anything.
+Each slot: name, value, unit, scale, period, doc_id, page_seq, page_printed, quote.
+
+RULES, in priority order:
+ 1. `quote` MUST be copied VERBATIM from the supplied page text. It is checked
+    character-by-character against the source; a paraphrase fails and the answer
+    is discarded.
+    The quote MUST CONTAIN THE FIGURE YOU PUT IN `value`, together with its
+    line-item label, on the same line. A quote carrying only the label is
+    useless: a reviewer who sees it cannot confirm the number, and the answer
+    will be rejected. Copy the whole line, label and figures together, e.g.
+      "Purchases of property, plant and equipment (PP&E) (1,577) (1,373) (1,420)"
+    For a non-numeric answer, quote the full sentence that states the fact.
+ 2. Each page is introduced by a line of the form
+      <<< doc_id=<ID> page_seq=<N> >>>
+    Copy `doc_id` and `page_seq` EXACTLY from the marker above the page you
+    quoted. Never construct, abbreviate or infer them.
+ 3. Never supply a figure from your own knowledge, and never adjust a figure to
+    make it consistent. Report what the page says.
+ 4. Also return: answer_type (scalar|ratio|comparison|ranking|qualitative),
+    metric_name if a named financial metric is requested, and any definition the
+    QUESTION ITSELF supplies (this overrides our formula book).
+ 5. If a required value is absent from the supplied pages, list it in
+    `missing_slots` and stop. Do not infer it, do not estimate it, and do not
+    substitute a similar line item from a different period or statement.

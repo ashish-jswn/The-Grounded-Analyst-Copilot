@@ -1,0 +1,160 @@
+# The Analyst Copilot — all tunables in one place.
+# Secrets and connection strings live in .env, never here.
+
+profile: prod            # dev == prod, so abstention thresholds need no
+                         # re-calibration between development and deployment.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODELS — per-stage binding. Deployment names come from .env.
+# Extraction is 78% of all input tokens, so the cheap model earns its keep there.
+# Never point verifier_b at the extractor's model without adversarial framing:
+# that is self-verification, not verification.
+# ─────────────────────────────────────────────────────────────────────────────
+# gpt-5-mini is a REASONING model: it spends completion tokens on hidden
+# reasoning BEFORE emitting content. A budget sized for the visible answer alone
+# returns content='' with finish_reason='length' and no error. Always leave
+# headroom. Context window is 400K, so assembly size is not a constraint.
+#
+# The reasoning stages run at 4000, not 2000, and that is a measured number:
+# at 2000, verifier_b spent its entire budget on hidden reasoning and never
+# emitted a verdict. The verifier fails closed, so the question abstained — a
+# config problem disguised as a refusal. Raise, never lower, without measuring.
+models:
+  router:         {provider: azure_openai, deployment_env: GPT_DEPLOYMENT,
+                   reasoning_effort: low,     verbosity: low, max_completion_tokens: 1000}
+  extractor:      {provider: azure_openai, deployment_env: GPT_DEPLOYMENT,
+                   reasoning_effort: medium,  verbosity: low, max_completion_tokens: 8000}
+  # The ANSWER stage. 62% of gold answers are non-numeric, so a bare figure is
+  # the wrong shape for most questions; this stage writes the answer from the
+  # quotes alone. Higher reasoning than extraction because choosing WHAT answers
+  # the question is the judgement, not finding the figures.
+  composer:       {provider: azure_openai, deployment_env: GPT_DEPLOYMENT,
+                   reasoning_effort: medium,  verbosity: low, max_completion_tokens: 4000}
+  formula_pick:   {provider: azure_openai, deployment_env: GPT_DEPLOYMENT,
+                   reasoning_effort: medium,  verbosity: low, max_completion_tokens: 4000}
+  verifier_a:     {provider: azure_openai, deployment_env: GPT_DEPLOYMENT,
+                   reasoning_effort: medium,  verbosity: low, max_completion_tokens: 4000}
+  verifier_b:     {provider_env: VERIFIER_B_PROVIDER, deployment_env: VERIFIER_B_DEPLOYMENT,
+                   reasoning_effort: medium,  verbosity: low, max_completion_tokens: 4000}
+  # EVAL ONLY - grades free-text answers against gold. 62% of gold answers are
+  # non-numeric, so without this the harness scores them all wrong. Never used
+  # by the pipeline: the judge grades, it does not help the system answer.
+  judge:          {provider: azure_openai, deployment_env: GPT_DEPLOYMENT,
+                   reasoning_effort: medium,  verbosity: low, max_completion_tokens: 4000}
+  embeddings:    {provider: azure_openai, deployment_env: EMBEDDING_DEPLOYMENT,
+                  dimensions: 1024}   # MUST equal EMBEDDING_DIMENSIONS and pages.embedding vector(1024)
+  reranker:      {provider: cohere_foundry, endpoint_env: COHERE_RERANK_ENDPOINT,
+                  model: Cohere-rerank-v4.0-pro}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ROUTING   measured: top-1 94.1% / top-2 97.1% / top-4 98.5%
+# ─────────────────────────────────────────────────────────────────────────────
+routing:
+  top_k_filings: 4              # be generous here, strict at verification
+  clarify_when_no_company: true # 2/136 questions name no company
+  reroute_max: 1                # read but not yet acted on: the re-routing
+                                # confirmation step is not implemented.
+  fallback_next_4: false        # escalate by DEPTH, not breadth: top-4 and
+                                # top-8 both hit 134/136, so more filings add
+                                # nothing. Kept for unseen uploads only.
+  prefer_coverage_years: true   # once populated, supersedes the year heuristic
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RETRIEVAL
+# ─────────────────────────────────────────────────────────────────────────────
+retrieval:
+  bm25_top_k: 20                # tier 1 — measured 85.7% recall with anchors
+  bm25_top_k_escalated: 40      # tier 2 — measured 84.1% assembled at router top-4
+  dense_top_k: 20
+  rrf_k: 60                     # score(d) = Σ 1/(60 + rank)
+  rerank_top_n: 15
+  assembly_token_budget: 42000  # gpt-5-mini context = 400K, so ~10x headroom.
+                                # Raise only if eval shows recall-bound failures.
+  neighbour_expand: 1           # ±1 page in tier 1, ±2 when escalated
+  use_reranker: true            # ablation flag — false isolates the reranker's lift
+
+  # `retrieval/dense.py` holds the page vectors in memory and fuses them as a
+  # third RRF ranking, always scoped to the routed candidates.
+  #
+  # Measured, 127 questions with a mapped gold page:
+  #     dense@20 alone, oracle doc ............ 74.8% from 19.9 pages
+  #     anchors + BM25, router top-4 .......... 85.0%
+  #     anchors + BM25 + dense, router top-4 .. 88.2%   <- tier 1 now equals
+  #     escalated BM25@40, router top-4 ....... 88.2%      what tier 2 reached,
+  #                                                        from 87 pages not 119
+  #
+  # Setting this false is a real ablation. It also degrades safely: with
+  # `pages.embedding` unpopulated the index is empty and the stack falls back
+  # to anchors + BM25 rather than erroring.
+  use_dense: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VERIFICATION — deterministic gates first, then optional LLM verifiers
+# ─────────────────────────────────────────────────────────────────────────────
+verification:
+  # G1b is deterministic proof that the reported figure appears IN its quote.
+  # G1 proves the quote is on the page; G1b proves the quote carries the number.
+  # Measured: without it, a label-only quote passed every gate and was then
+  # rejected by both LLM verifiers, costing a full escalation round.
+  enabled_gates: [G1, G1b, G2, G3, G4, G5, G6, G7]
+  require_all_gates: true       # any failure ⇒ abstain. These are deterministic
+                                # and model-independent — they do most of the work.
+
+  # LLM verification is off. Measured on 25 stratified questions:
+  #      verifiers ON   12/25 answered, +1=9  -1=3  net +6, 75% accurate, 61 s
+  #      verifiers OFF  20/25 answered, +1=12 -1=8  net +4, 60% accurate, 41 s
+  # Gates-only answers 8 more questions and gets 5 of them wrong, and runs ~20 s
+  # faster per question. Set this to `true` for the higher-scoring, slower
+  # configuration. The deterministic gates G1-G7 run either way.
+  use_verifiers: false
+  verifier_policy: unanimous    # applies only when use_verifiers is true
+
+  # Verifier independence. A and B are both gpt-5-mini, so independence comes
+  # from ADVERSARIAL FRAMING plus context isolation, not from architecture.
+  # Swapping B to another model family is a .env change (VERIFIER_B_PROVIDER,
+  # VERIFIER_B_DEPLOYMENT); add an adapter under llm/ for a non-OpenAI API.
+  independence: same_model_adversarial
+
+  # Keep adversarial framing on even with a second model family. Measured with
+  # a second family as verifier B:
+  #   adversarial: false  ->  batch of 5: score -2, false-answer rate 60%
+  #   adversarial: true   ->  25 questions: score +7, false-answer rate 12%
+  # In all three wrong answers BOTH verifiers returned VALID. Independence and
+  # skepticism are separate properties: this extractor produces plausible
+  # wrong answers that a merely neutral verifier accepts.
+  verifier_b_adversarial: true
+  abstain_string: "Not found in this filing."   # NEVER paraphrase this
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INGEST
+# ─────────────────────────────────────────────────────────────────────────────
+ingest:
+  min_page_chars: 40            # page-splitter fragment merge threshold — a seam is
+                                # often marked by BOTH <hr> AND page-break CSS
+  table_min_rows: 3             # data-table gate; 46% of <table> are layout artifacts
+  table_min_numeric_cells: 2
+  # 80,327 facts extracted, each carrying its page and the row label displayed
+  # in the filing. Costs 1.7 s even on the 15.9 MB JPMorgan 10-K.
+  # Not yet read at query time: no module under query/ or retrieval/ touches
+  # the `facts` table.
+  xbrl: true
+  xbrl_exclude_dimensional: true# segment/geography facts excluded by default
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVAL — four answer shapes, four predicates, reported separately
+# ─────────────────────────────────────────────────────────────────────────────
+eval:
+  numeric_tolerance: 0.005      # ±0.5% relative
+  location_containment: 0.6     # cited page text vs gold evidence_text
+  page_seq_slack: 1             # derived page within ±1 of mapped gold page
+  gold_map_min_jaccard: 0.35    # 126/136 questions map at this threshold
+  split_by: company             # NEVER by question — boilerplate would leak
+  report_by_answer_shape: true  # 52 numeric / 35 yes-no / 26 phrase / 23 multi-sentence
+
+  # Token prices for the batch runner's spend report (scripts/run_batches.py).
+  # Deliberately unset: tokens are measured exactly, and dollars are only ever
+  # derived from a confirmed rate. Fill these in from your Azure pricing for the
+  # deployment. With them unset the runner reports tokens and --max-tokens still works.
+  pricing:
+    input_per_mtok:            # e.g. 0.25   (USD per 1M input tokens)
+    output_per_mtok:           # e.g. 2.00   (USD per 1M output tokens)

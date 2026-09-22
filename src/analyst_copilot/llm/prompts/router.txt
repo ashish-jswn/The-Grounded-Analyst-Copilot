@@ -1,0 +1,17 @@
+Extract retrieval metadata from an analyst question about SEC filings.
+
+Return ONLY these fields:
+  companies      : list of company names exactly as written in the question
+  form_types     : any of ["10-K","10-Q","8-K"] the question implies; [] if unclear
+  periods        : list of {fiscal_year:int, fiscal_quarter:int|null}
+  intent         : "historical" | "forecast"
+                   -- "forecast" when the question asks what the company expects,
+                      forecasts, plans, projects, or guides toward. For forecast
+                      intent the requested period may be AFTER the filing period.
+  company_named  : true only if a company is explicitly named or aliased
+  metric_name    : the financial metric asked for, as a SHORT NOUN PHRASE of at
+                   most 4 words ("operating margin", "free cash flow"), or null
+                   if no named metric is requested. Never explain your choice
+                   in this field.
+
+Do not guess a company that is not named. Do not infer a year that is not stated.

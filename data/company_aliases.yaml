@@ -1,0 +1,44 @@
+# Company alias seed table — loaded into the `company_aliases` table at ingest.
+#
+# THIS EXACT TABLE PRODUCED THE MEASURED ROUTER ACCURACY:
+#      top-1 94.1% · top-2 97.1% · top-4 98.5%   (n=136)
+#    It closes the 14/136 questions that name a company only by alias
+#    (AMEX, JnJ, JPM). Re-deriving it will not reproduce those numbers.
+#
+# Matching: word-boundary against the lowercased question, also accepting a
+# possessive form ("3M's").
+#
+# Keys are company_slug (uppercase, matching the filing filename prefix).
+
+"3M":                 [3m, mmm, minnesota mining]
+ACTIVISIONBLIZZARD:   [activision, blizzard, atvi]
+ADOBE:                [adobe, adbe]
+AES:                  [aes, "aes corporation"]
+AMAZON:               [amazon, amzn]
+AMCOR:                [amcor]
+AMD:                  [amd, "advanced micro devices"]
+AMERICANEXPRESS:      ["american express", amex, axp]
+AMERICANWATERWORKS:   ["american water", "american water works", awk]
+BESTBUY:              ["best buy", bby]
+BLOCK:                [block, square, sq]
+BOEING:               [boeing, ba]
+COCACOLA:             ["coca-cola", "coca cola", coke, ko]
+CORNING:              [corning, glw]
+COSTCO:               [costco, cost]
+CVSHEALTH:            [cvs, "cvs health"]
+FOOTLOCKER:           ["foot locker", footlocker, fl]
+GENERALMILLS:         ["general mills", gis]
+JOHNSON_JOHNSON:      ["johnson & johnson", "johnson and johnson", jnj, "j&j", johnson]
+JPMORGAN:             [jpmorgan, "jp morgan", jpm, chase]
+KRAFTHEINZ:           [kraft, heinz, "kraft heinz", khc]
+LOCKHEEDMARTIN:       [lockheed, "lockheed martin", lmt]
+MGMRESORTS:           [mgm, "mgm resorts"]
+MICROSOFT:            [microsoft, msft]
+NETFLIX:              [netflix, nflx]
+NIKE:                 [nike, nke]
+PAYPAL:               [paypal, pypl]
+PEPSICO:              [pepsico, pepsi, pep]
+PFIZER:               [pfizer, pfe]
+ULTABEAUTY:           [ulta, "ulta beauty"]
+VERIZON:              [verizon, vz]
+WALMART:              [walmart, "wal-mart", wmt]

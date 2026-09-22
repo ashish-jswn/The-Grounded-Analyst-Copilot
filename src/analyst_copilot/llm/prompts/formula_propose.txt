@@ -1,0 +1,10 @@
+Name the standard financial formula for this metric.
+
+Return:
+  definition : one sentence, plain English
+  formula    : an expression over named operands
+  operands   : each with the us-gaap concepts that would carry it
+  unit       : the result unit
+
+Use only the four arithmetic operators and avg/delta/prev.
+If the metric has no single standard definition, say so instead of choosing one.

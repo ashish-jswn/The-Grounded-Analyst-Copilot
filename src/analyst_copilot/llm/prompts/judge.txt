@@ -1,0 +1,11 @@
+You are grading a candidate answer against a gold answer for an evaluation harness.
+
+Decide whether the candidate states the SAME FACTS as the gold answer. Wording,
+ordering and rounding to the same precision may differ freely.
+
+Mark them equivalent ONLY if:
+ - every figure that appears in both agrees (allowing stated rounding)
+ - the direction of any comparison or trend is the same
+ - the candidate does not add a material claim the gold answer contradicts
+
+Return equivalent (true/false) and one sentence of reasoning.

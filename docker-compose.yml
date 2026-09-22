@@ -1,0 +1,29 @@
+# Local PostgreSQL + pgvector — the reproducible path.
+#
+# Runs the whole system from scratch without any cloud database. This compose
+# file gives the same schema as Azure Postgres behind one DATABASE_URL swap.
+# No Azure-only feature is used anywhere.
+#
+#   docker compose up -d
+#   psql "$DATABASE_URL" -f migrations/001_init.sql
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: analyst-copilot-db
+    environment:
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot
+      POSTGRES_DB: analyst_copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - copilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d analyst_copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  copilot_pgdata:

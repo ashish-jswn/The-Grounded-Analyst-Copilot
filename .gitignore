@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+# Any .env variant (.env.bak, .env.local, ...) can hold real keys.
+.env.*
+!.env.example
+
+# Local editor / assistant settings
+.claude/
+.vscode/
+.idea/
+
+# Local scratch: page-split pickles, ingest logs, eval runs. Rebuildable.
+.cache/
+
+# Local databases and derived/cached artifacts (rebuildable from data/filings)
+data/raw/*
+data/cache/*
+!data/raw/.gitkeep
+!data/cache/.gitkeep
+*.db
+*.duckdb
+
+# Raw filings and practice set are large / provided separately, not committed
+data/filings/*
+data/practice/*
+!data/filings/.gitkeep
+!data/practice/.gitkeep
+
+.pytest_cache/
+.DS_Store
+
+# ── Frontend (Next.js) ───────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+next-env.d.ts
